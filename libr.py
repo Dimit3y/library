@@ -10,6 +10,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
+import sys
+print(">>> Starting bot...", file=sys.stderr)
+sys.stderr.flush()
 
 # 1. НАСТРОЙКИ
 WEBHOOK_PATH = "/webhook"
@@ -21,6 +24,7 @@ WEBAPP_PORT = int(os.getenv("PORT", 8080))
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
+os.remove('library.db')
 
 # 2. БАЗА ДАННЫХ (та же, что и раньше)
 def init_db():
@@ -41,6 +45,9 @@ def init_db():
                        FOREIGN KEY(book_id) REFERENCES books(id))''')
     conn.commit()
     conn.close()
+    print(">>> Creating tables if not exist...", file=sys.stderr)
+    # ... создание таблиц
+    print(">>> Tables created/verified", file=sys.stderr)
 
 # 3. КЛАВИАТУРЫ И СОСТОЯНИЯ (без изменений)
 def main_menu():
@@ -259,6 +266,7 @@ async def on_startup(app: web.Application):
 
 def main():
     init_db()
+    app = web.Application()
     conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
