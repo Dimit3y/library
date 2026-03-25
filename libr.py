@@ -255,8 +255,16 @@ async def add_book(message: Message):
 async def on_startup(app: web.Application):
     """Устанавливает вебхук при старте сервера"""
     await bot.set_webhook(WEBHOOK_URL)
+    
 
 def main():
+    init_db()
+    conn = sqlite3.connect('library.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = cursor.fetchall()
+    print(f"Tables in DB: {tables}", file=sys.stderr)
+    conn.close()
     # Создаём aiohttp-приложение
     app = web.Application()
     
@@ -272,9 +280,6 @@ def main():
     
     # Запускаем веб-сервер
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
