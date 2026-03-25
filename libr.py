@@ -124,7 +124,7 @@ async def my_books(callback: CallbackQuery):
     conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT b.id, b.title, ib.issued_at
+        SELECT b.id, b.title, ib.issued_at, ib.id
         FROM issued_books ib
         JOIN books b ON ib.book_id = b.id
         WHERE ib.user_id = ?
@@ -138,30 +138,42 @@ async def my_books(callback: CallbackQuery):
 
     text = "📖 Ваши книги:\n\n"
     keyboard = []
-    for b_id, title, issued_at in books:
+    for book_id, title, issued_at, issued_id in books:
         text += f"{title} (взято: {issued_at[:10]})\n"
-        keyboard.append([InlineKeyboardButton(text=f"🔁 Вернуть {title}", callback_data=f"return_{b_id}")])
+        keyboard.append([InlineKeyboardButton(text=f"🔁 Вернуть {title}", callback_data=f"return_{issued_id}")])
     keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")])
     await callback.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 @dp.callback_query(F.data.startswith("return_"))
 async def return_book(callback: CallbackQuery):
-    book_id = int(callback.data.split("_")[1])
+    issued_id = int(callback.data.split("_")[1])
     user_id = callback.from_user.id
 
     conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM issued_books WHERE book_id = ? AND user_id = ?", (book_id, user_id))
-    if not cursor.fetchone():
-        await callback.answer("У вас нет этой книги!", show_alert=True)
+    # Проверяем, существует ли запись и принадлежит ли пользователю
+    cursor.execute("SELECT book_id, user_id FROM issued_books WHERE id = ?", (issued_id,))
+    row = cursor.fetchone()
+    if not row:
+        await callback.answer("Книга уже возвращена!", show_alert=True)
         conn.close()
         await my_books(callback)
         return
-
-    cursor.execute("DELETE FROM issued_books WHERE book_id = ? AND user_id = ?", (book_id, user_id))
+    
+    book_id, owner_id = row
+    if owner_id != user_id:
+        await callback.answer("Это не ваша книга!", show_alert=True)
+        conn.close()
+        await my_books(callback)
+        return
+    
+    # Удаляем конкретную запись
+    cursor.execute("DELETE FROM issued_books WHERE id = ?", (issued_id,))
+    # Увеличиваем количество экземпляров
     cursor.execute("UPDATE books SET count = count + 1 WHERE id = ?", (book_id,))
     conn.commit()
     conn.close()
+    
     await callback.answer("Книга возвращена в библиотеку!", show_alert=True)
     await my_books(callback)
 
