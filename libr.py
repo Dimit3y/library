@@ -249,30 +249,32 @@ async def add_book(message: Message):
     except Exception as e:
         await message.answer("Ошибка! Пиши: /add Название | Автор | количество (опционально)\nПример: /add Капитанская дочка | Пушкин | 3")
 
-# 5. НАСТРОЙКА WEBHOOK
-async def on_startup(bot: Bot):
-    """Устанавливает вебхук при запуске приложения."""
+# ... все ваши обработчики и функции (start, show_books, take_book, etc.) выше
+
+# ========== НАСТРОЙКА WEBHOOK ==========
+async def on_startup(app: web.Application):
+    """Устанавливает вебхук при старте сервера"""
     await bot.set_webhook(WEBHOOK_URL)
 
 def main():
-    # Инициализация БД (создаст таблицы, если их нет)
-    init_db()
-
-    # Создаём aiohttp приложение
+    # Создаём aiohttp-приложение
     app = web.Application()
-
+    
     # Регистрируем обработчик вебхука
     webhook_handler = SimpleRequestHandler(dp, bot)
     webhook_handler.register(app, path=WEBHOOK_PATH)
-
+    
     # Привязываем диспетчер и бота к приложению
     setup_application(app, dp, bot=bot)
-
-    # Вызываем on_startup перед запуском сервера
+    
+    # Добавляем функцию, которая выполнится при старте
     app.on_startup.append(on_startup)
-
+    
     # Запускаем веб-сервер
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
