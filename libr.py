@@ -1,6 +1,7 @@
 import sqlite3
 import asyncio
 import os
+import sys
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher, types, F
@@ -10,24 +11,26 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
-import sys
-print(">>> Starting bot...", file=sys.stderr)
-sys.stderr.flush()
 
 # 1. НАСТРОЙКИ
+API_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 WEBHOOK_PATH = "/webhook"
 WEBAPP_HOST = "0.0.0.0"
-API_TOKEN = os.getenv("BOT_TOKEN")      # читаем из окружения
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # будет задана на Render
 WEBAPP_PORT = int(os.getenv("PORT", 8080))
+
+if not API_TOKEN:
+    raise Exception("BOT_TOKEN not set")
+if not WEBHOOK_URL:
+    raise Exception("WEBHOOK_URL not set")
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-os.remove('library.db')
 
-# 2. БАЗА ДАННЫХ (та же, что и раньше)
+# 2. БАЗА ДАННЫХ
 def init_db():
+    print(">>> Initializing database...", file=sys.stderr)
     conn = sqlite3.connect('library.db')
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS books 
@@ -45,11 +48,9 @@ def init_db():
                        FOREIGN KEY(book_id) REFERENCES books(id))''')
     conn.commit()
     conn.close()
-    print(">>> Creating tables if not exist...", file=sys.stderr)
-    # ... создание таблиц
-    print(">>> Tables created/verified", file=sys.stderr)
+    print(">>> Database initialized", file=sys.stderr)
 
-# 3. КЛАВИАТУРЫ И СОСТОЯНИЯ (без изменений)
+# 3. КЛАВИАТУРЫ И СОСТОЯНИЯ
 def main_menu():
     buttons = [
         [InlineKeyboardButton(text="📚 Список книг", callback_data="list_books")],
@@ -61,10 +62,7 @@ def main_menu():
 class SearchState(StatesGroup):
     waiting_for_query = State()
 
-# 4. ВСЕ ОБРАБОТЧИКИ (без изменений – они полностью идентичны предыдущей версии)
-# Для краткости привожу их снова, но они не изменились.
-# Если вы уже использовали предыдущий код, просто скопируйте их сюда.
-
+# 4. ОБРАБОТЧИКИ
 @dp.message(Command("start"))
 async def start(message: Message):
     conn = sqlite3.connect('library.db')
@@ -256,37 +254,23 @@ async def add_book(message: Message):
     except Exception as e:
         await message.answer("Ошибка! Пиши: /add Название | Автор | количество (опционально)\nПример: /add Капитанская дочка | Пушкин | 3")
 
-# ... все ваши обработчики и функции (start, show_books, take_book, etc.) выше
-
-# ========== НАСТРОЙКА WEBHOOK ==========
+# 5. WEBHOOK
 async def on_startup(app: web.Application):
     """Устанавливает вебхук при старте сервера"""
+    print(f">>> Setting webhook to {WEBHOOK_URL}", file=sys.stderr)
     await bot.set_webhook(WEBHOOK_URL)
-    
 
 def main():
-    init_db()
-    app = web.Application()
-    conn = sqlite3.connect('library.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = cursor.fetchall()
-    print(f"Tables in DB: {tables}", file=sys.stderr)
-    conn.close()
-    # Создаём aiohttp-приложение
-    app = web.Application()
+    print(">>> Starting bot application", file=sys.stderr)
+    init_db()  # обязательно!
     
-    # Регистрируем обработчик вебхука
+    app = web.Application()
     webhook_handler = SimpleRequestHandler(dp, bot)
     webhook_handler.register(app, path=WEBHOOK_PATH)
-    
-    # Привязываем диспетчер и бота к приложению
     setup_application(app, dp, bot=bot)
-    
-    # Добавляем функцию, которая выполнится при старте
     app.on_startup.append(on_startup)
     
-    # Запускаем веб-сервер
+    print(f">>> Starting web server on {WEBAPP_HOST}:{WEBAPP_PORT}", file=sys.stderr)
     web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
 
 if __name__ == "__main__":
